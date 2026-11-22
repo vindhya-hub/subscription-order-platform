@@ -1,0 +1,183 @@
+"ISO-8601 calendar date, e.g. 2026-11-22."
+scalar Date
+
+"ISO-8601 instant in UTC, e.g. 2026-11-22T09:30:00Z."
+scalar DateTime
+
+"Exact decimal serialized as a string to avoid floating-point rounding, e.g. \"31.98\"."
+scalar Decimal
+
+type Query {
+  "Plans (products) customers can subscribe to."
+  plans: [Plan!]!
+  customers: [Customer!]!
+  "Subscriptions, newest first, optionally filtered by status."
+  subscriptions(status: SubscriptionStatus): [Subscription!]!
+  subscription(id: ID!): Subscription
+  "Orders, newest first, optionally filtered by status and/or subscription."
+  orders(status: OrderStatus, subscriptionId: ID, limit: Int = 100): [Order!]!
+  order(id: ID!): Order
+  "Messages currently in the dead-letter queue (up to 100)."
+  deadLetters: [DeadLetter!]!
+  "Depth of the order queue and its dead-letter queue."
+  queueStats: QueueStats!
+  "Failure injection currently applied to the simulated payment/fulfilment step."
+  failureInjection: FailureInjection!
+}
+
+type Mutation {
+  createSubscription(input: CreateSubscriptionInput!): Subscription!
+  "ACTIVE -> PAUSED. No-op if already paused."
+  pauseSubscription(id: ID!): Subscription!
+  "PAUSED -> ACTIVE. Cycles missed while paused are skipped, not billed."
+  resumeSubscription(id: ID!): Subscription!
+  "ACTIVE/PAUSED -> CANCELLED (terminal). No-op if already cancelled."
+  cancelSubscription(id: ID!): Subscription!
+  """
+  Creates orders for every active subscription due on or before asOf (default: today), advances their
+  next run dates and publishes an OrderCreated event per order. Idempotent per subscription and run date.
+  """
+  runBillingCycle(asOf: Date): BillingRunResult!
+  "Moves dead letters back to the order queue. Omit messageIds to replay all of them."
+  replayDeadLetters(messageIds: [ID!]): ReplayResult!
+  "Changes failure injection at runtime. planCode limits failures to one plan."
+  setFailureInjection(mode: FailureMode!, planCode: String): FailureInjection!
+}
+
+input CreateSubscriptionInput {
+  "Existing customer. Provide either customerId or newCustomer."
+  customerId: ID
+  newCustomer: NewCustomerInput
+  planId: ID!
+  "1 to 100 units per delivery."
+  quantity: Int! = 1
+  frequency: Frequency!
+  "First run date; defaults to today. Cannot be in the past."
+  startDate: Date
+}
+
+input NewCustomerInput {
+  name: String!
+  email: String!
+}
+
+type Plan {
+  id: ID!
+  code: String!
+  name: String!
+  description: String
+  unitPrice: Decimal!
+  currency: String!
+  active: Boolean!
+}
+
+type Customer {
+  id: ID!
+  name: String!
+  email: String!
+  createdAt: DateTime!
+}
+
+type Subscription {
+  id: ID!
+  customer: Customer!
+  plan: Plan!
+  quantity: Int!
+  frequency: Frequency!
+  status: SubscriptionStatus!
+  "Date of the next order. Run dates are derived from anchorDate, so monthly schedules do not drift."
+  nextRunDate: Date!
+  anchorDate: Date!
+  "Price of one delivery (unit price x quantity)."
+  recurringAmount: Decimal!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  cancelledAt: DateTime
+  "Orders created for this subscription, newest run date first."
+  orders: [Order!]!
+}
+
+type Order {
+  id: ID!
+  subscription: Subscription!
+  "The billing cycle this order belongs to; unique per subscription."
+  runDate: Date!
+  quantity: Int!
+  unitPrice: Decimal!
+  amount: Decimal!
+  currency: String!
+  status: OrderStatus!
+  "Processing attempts so far, including attempts after a dead-letter replay."
+  attempts: Int!
+  lastError: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  fulfilledAt: DateTime
+}
+
+type BillingRunResult {
+  asOf: Date!
+  "Active subscriptions that were due on or before asOf."
+  dueSubscriptions: Int!
+  ordersCreated: Int!
+  orders: [Order!]!
+}
+
+type DeadLetter {
+  messageId: ID!
+  "Order referenced by the payload, if it could be read."
+  orderId: ID
+  payload: String!
+  sentAt: DateTime
+  order: Order
+}
+
+type ReplayResult {
+  replayed: Int!
+  messageIds: [ID!]!
+}
+
+type QueueStats {
+  "in-memory or aws"
+  provider: String!
+  "Messages waiting in the order queue."
+  visible: Int!
+  "Messages being processed or waiting out a retry back-off."
+  inFlight: Int!
+  deadLetters: Int!
+  "Receives allowed before SQS moves a message to the dead-letter queue."
+  maxReceiveCount: Int!
+}
+
+type FailureInjection {
+  mode: FailureMode!
+  planCode: String
+}
+
+enum Frequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  FULFILLED
+  FAILED
+}
+
+enum FailureMode {
+  "Every attempt succeeds."
+  NONE
+  "The first delivery of each message fails; the retry succeeds."
+  TRANSIENT
+  "Every delivery fails, so messages end up in the dead-letter queue."
+  PERMANENT
+}

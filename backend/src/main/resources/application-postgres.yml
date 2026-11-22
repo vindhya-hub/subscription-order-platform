@@ -1,0 +1,8 @@
+# PostgreSQL instead of H2. There are deliberately no defaults here: every value must come from the
+# environment (see .env.example and the README's "Configuration & secrets" section). The application refuses
+# to start, listing what is missing, when any of them is absent.
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}

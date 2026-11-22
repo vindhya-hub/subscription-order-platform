@@ -1,0 +1,14 @@
+# Real SNS/SQS through the AWS SDK v2. Credentials come from the SDK default chain
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, profile or IAM role).
+# For LocalStack set AWS_ENDPOINT_URL=http://localhost:4566 (any dummy credentials work).
+app:
+  messaging:
+    provider: aws
+    aws:
+      region: ${AWS_REGION:us-east-1}
+      endpoint: ${AWS_ENDPOINT_URL:}
+      topic-name: order-events
+      queue-name: order-processing
+      dead-letter-queue-name: order-processing-dlq
+    consumer:
+      wait-time: 10s
