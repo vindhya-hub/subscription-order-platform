@@ -8,15 +8,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 /**
  * The SQS dead-letter queue. SQS has no real "peek", so messages are received with a short visibility
- * timeout (to page past the first ten) and released straight afterwards. Replay re-sends each message to the
- * source queue and deletes it from the DLQ. Both operations are serialized within this instance so a
- * concurrent peek cannot hide messages from a replay.
+ * timeout (to page past the first ten) and released straight afterwards. Replay runs the caller's
+ * {@code beforeResend} hook, re-sends each message to the source queue and deletes it from the DLQ. Both
+ * operations are serialized within this instance so a concurrent peek cannot hide messages from a replay.
  */
 public class SqsDeadLetterQueue implements DeadLetterQueue {
 
@@ -59,7 +60,8 @@ public class SqsDeadLetterQueue implements DeadLetterQueue {
     }
 
     @Override
-    public synchronized List<DeadLetterMessage> redrive(Set<String> messageIds) {
+    public synchronized List<DeadLetterMessage> redrive(Set<String> messageIds,
+                                                    Consumer<DeadLetterMessage> beforeResend) {
         List<DeadLetterMessage> moved = new ArrayList<>();
         List<String> notSelected = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -77,6 +79,8 @@ public class SqsDeadLetterQueue implements DeadLetterQueue {
                     }
                     progress = true;
                     if (messageIds.isEmpty() || messageIds.contains(message.messageId())) {
+                        DeadLetterMessage deadLetter = toDeadLetter(message);
+                        beforeResend.accept(deadLetter);
                         sqs.sendMessage(request -> request
                                 .queueUrl(sourceQueueUrl)
                                 .messageBody(message.body())
@@ -84,7 +88,7 @@ public class SqsDeadLetterQueue implements DeadLetterQueue {
                         sqs.deleteMessage(request -> request
                                 .queueUrl(deadLetterQueueUrl)
                                 .receiptHandle(message.receiptHandle()));
-                        moved.add(toDeadLetter(message));
+                        moved.add(deadLetter);
                     } else {
                         notSelected.add(message.receiptHandle());
                     }

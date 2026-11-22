@@ -26,7 +26,7 @@ public class BillingScheduler {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${app.billing.scheduler.cron:0 0 6 * * *}", zone = "${app.billing.scheduler.zone:UTC}")
+    @Scheduled(cron = "${app.billing.scheduler.cron}", zone = "${app.billing.scheduler.zone}")
     public void runScheduledBilling() {
         LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(properties.scheduler().zone())));
         BillingRunResult result = billingService.runBillingCycle(today);

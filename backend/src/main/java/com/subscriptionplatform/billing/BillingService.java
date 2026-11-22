@@ -18,7 +18,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -75,7 +75,7 @@ public class BillingService {
                 if (billed != null) {
                     created.addAll(billed);
                 }
-            } catch (OptimisticLockingFailureException | DataIntegrityViolationException e) {
+            } catch (ConcurrencyFailureException | DataIntegrityViolationException e) {
                 // Another run billed (or modified) this subscription concurrently; its result stands.
                 log.info("Skipped subscription {}: changed concurrently ({})", subscriptionId, e.getClass().getSimpleName());
             }

@@ -1,10 +1,15 @@
-# Default profile: H2 in-memory database + in-memory SNS/SQS. No external services needed.
+# Every environment-specific setting is read from an environment variable. The defaults after ':' are
+# non-secret values for local development only: an in-memory H2 database and the in-memory SNS/SQS broker.
+# Profiles: 'postgres' (PostgreSQL, no defaults) and 'aws' (SNS/SQS via the AWS SDK; also LocalStack).
+# Full list: README "Configuration & secrets" and .env.example.
 spring:
   application:
     name: subscription-order-platform
   datasource:
-    url: jdbc:h2:mem:subscriptions;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
-    username: sa
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:subscriptions;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1}
+    # H2's built-in in-memory account; nothing secret.
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   jpa:
     open-in-view: false
     hibernate:
@@ -17,13 +22,18 @@ spring:
     locations: classpath:db/migration
   graphql:
     graphiql:
-      enabled: true
+      enabled: ${GRAPHIQL_ENABLED:true}
     schema:
       printer:
         enabled: true
+    cors:
+      # Only needed when the UI calls the API cross-origin (VITE_GRAPHQL_URL pointing at another host);
+      # the Vite dev proxy and the nginx image both serve /graphql same-origin. Comma-separated.
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+      allowed-methods: GET,POST
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   shutdown: graceful
 
 management:
@@ -38,32 +48,48 @@ management:
 
 app:
   seed:
-    enabled: true
+    enabled: ${SEED_DEMO_DATA:true}
   billing:
-    max-catch-up-cycles: 12
+    max-catch-up-cycles: ${BILLING_MAX_CATCH_UP_CYCLES:12}
     scheduler:
-      enabled: true
-      cron: "0 0 6 * * *"
-      zone: UTC
+      enabled: ${BILLING_SCHEDULER_ENABLED:true}
+      # Spring cron: second minute hour day-of-month month day-of-week.
+      cron: "${BILLING_CRON:0 0 6 * * *}"
+      zone: ${BILLING_ZONE:UTC}
   outbox:
-    relay-interval: PT5S
+    relay-interval: ${OUTBOX_RELAY_INTERVAL:5s}
     batch-size: 100
   messaging:
-    # in-memory | aws
-    provider: in-memory
-    max-receive-count: 3
-    visibility-timeout: 30s
-    retry-backoff: 2s
+    # in-memory | aws (the 'aws' profile sets aws).
+    provider: ${MESSAGING_PROVIDER:in-memory}
+    # Receives before a message is dead-lettered by the in-memory broker. With SQS the queue's RedrivePolicy
+    # is authoritative (localstack/init-aws.sh creates it from the same variable).
+    max-receive-count: ${MESSAGING_MAX_RECEIVE_COUNT:3}
+    visibility-timeout: ${MESSAGING_VISIBILITY_TIMEOUT:30s}
+    retry-backoff: ${MESSAGING_RETRY_BACKOFF:2s}
     consumer:
-      enabled: true
+      enabled: ${MESSAGING_CONSUMER_ENABLED:true}
       batch-size: 10
-      wait-time: 5s
+      wait-time: ${MESSAGING_CONSUMER_WAIT_TIME:5s}
+    aws:
+      # Required when provider=aws: region, plus the topic, queue and dead-letter queue (each by ARN/URL or by
+      # name). Startup fails with a list of whatever is missing. Credentials are never configured here: the
+      # AWS SDK's default provider chain supplies them (environment, profile, ECS/EC2 role).
+      region: ${AWS_REGION:}
+      endpoint: ${AWS_ENDPOINT_URL:}
+      topic-arn: ${SNS_ORDER_TOPIC_ARN:}
+      topic-name: ${SNS_ORDER_TOPIC_NAME:}
+      queue-url: ${SQS_ORDER_QUEUE_URL:}
+      queue-name: ${SQS_ORDER_QUEUE_NAME:}
+      dead-letter-queue-url: ${SQS_ORDER_DLQ_URL:}
+      dead-letter-queue-name: ${SQS_ORDER_DLQ_NAME:}
   processing:
-    simulated-latency: 400ms
+    simulated-latency: ${PROCESSING_SIMULATED_LATENCY:400ms}
     failure-injection:
-      # NONE | TRANSIENT | PERMANENT
-      mode: NONE
+      # NONE | TRANSIENT | PERMANENT; optionally limited to one plan code. Changeable at runtime via GraphQL.
+      mode: ${FAILURE_INJECTION_MODE:NONE}
+      plan-code: ${FAILURE_INJECTION_PLAN_CODE:}
 
 logging:
   level:
-    com.subscriptionplatform: INFO
+    com.subscriptionplatform: ${LOG_LEVEL:INFO}

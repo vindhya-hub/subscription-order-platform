@@ -21,7 +21,8 @@ public class FailureInjector {
 
     public FailureInjector(ProcessingProperties properties) {
         ProcessingProperties.FailureInjection initial = properties.failureInjection();
-        this.settings = new AtomicReference<>(new FailureInjectionSettings(initial.mode(), normalize(initial.planCode())));
+        this.settings = new AtomicReference<>(new FailureInjectionSettings(
+                initial.mode() != null ? initial.mode() : FailureMode.NONE, normalize(initial.planCode())));
     }
 
     public FailureInjectionSettings current() {

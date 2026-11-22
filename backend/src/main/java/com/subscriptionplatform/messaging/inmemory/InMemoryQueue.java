@@ -174,6 +174,16 @@ public class InMemoryQueue implements MessageQueue {
         }
     }
 
+    /** Removes the message with this id; returns false if it is not in the queue. */
+    public boolean remove(String messageId) {
+        lock.lock();
+        try {
+            return entries.remove(messageId) != null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** Removes and returns every message matching {@code filter}. */
     public List<StoredMessage> removeIf(Predicate<StoredMessage> filter) {
         lock.lock();

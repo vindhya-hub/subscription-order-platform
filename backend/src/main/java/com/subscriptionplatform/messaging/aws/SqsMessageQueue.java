@@ -25,8 +25,9 @@ public class SqsMessageQueue implements MessageQueue {
 
     @Override
     public List<ReceivedMessage> receive(int maxMessages, Duration waitTime) {
+        // SQS long polling works in whole seconds; round up so a sub-second wait does not become a busy loop.
         List<Message> messages = sqs.receiveMessage(SqsMessages.receiveRequest(
-                queueUrl, maxMessages, (int) waitTime.toSeconds(), null)).messages();
+                queueUrl, maxMessages, SqsMessages.toWholeSeconds(waitTime), null)).messages();
         return messages.stream().map(SqsMessageQueue::toReceivedMessage).toList();
     }
 

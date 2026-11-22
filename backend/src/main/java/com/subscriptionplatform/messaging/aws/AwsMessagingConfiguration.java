@@ -10,17 +10,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
-import software.amazon.awssdk.services.sns.SnsClientBuilder;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.SqsClientBuilder;
 
 /**
  * SNS/SQS through the AWS SDK v2: {@code app.messaging.provider=aws}.
  *
- * <p>Credentials come from the SDK's default provider chain (environment variables, profile, IAM role).
- * Set {@code app.messaging.aws.endpoint} to point the clients at LocalStack.
+ * <p>Credentials always come from the SDK's default provider chain (environment variables, shared profile,
+ * container or instance role); nothing credential-related is read from application configuration. Set
+ * {@code AWS_ENDPOINT_URL} to point the clients at LocalStack.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "app.messaging.provider", havingValue = "aws")
@@ -28,22 +28,12 @@ public class AwsMessagingConfiguration {
 
     @Bean
     public SnsClient snsClient(MessagingProperties properties) {
-        MessagingProperties.Aws aws = properties.aws();
-        SnsClientBuilder builder = SnsClient.builder().region(Region.of(aws.region()));
-        if (StringUtils.hasText(aws.endpoint())) {
-            builder.endpointOverride(URI.create(aws.endpoint()));
-        }
-        return builder.build();
+        return configure(SnsClient.builder(), properties.aws()).build();
     }
 
     @Bean
     public SqsClient sqsClient(MessagingProperties properties) {
-        MessagingProperties.Aws aws = properties.aws();
-        SqsClientBuilder builder = SqsClient.builder().region(Region.of(aws.region()));
-        if (StringUtils.hasText(aws.endpoint())) {
-            builder.endpointOverride(URI.create(aws.endpoint()));
-        }
-        return builder.build();
+        return configure(SqsClient.builder(), properties.aws()).build();
     }
 
     @Bean
@@ -65,5 +55,13 @@ public class AwsMessagingConfiguration {
     @Bean
     public DeadLetterQueue deadLetterQueue(SqsClient sqs, AwsMessagingResources resources) {
         return new SqsDeadLetterQueue(sqs, resources.deadLetterQueueUrl(), resources.queueUrl());
+    }
+
+    private static <B extends AwsClientBuilder<B, ?>> B configure(B builder, MessagingProperties.Aws aws) {
+        builder.region(Region.of(aws.region()));
+        if (StringUtils.hasText(aws.endpoint())) {
+            builder.endpointOverride(URI.create(aws.endpoint()));
+        }
+        return builder;
     }
 }

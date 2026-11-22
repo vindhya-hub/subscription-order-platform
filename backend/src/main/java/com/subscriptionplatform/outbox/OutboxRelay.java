@@ -69,8 +69,8 @@ public class OutboxRelay {
         }
     }
 
-    @Scheduled(fixedDelayString = "${app.outbox.relay-interval:PT5S}",
-            initialDelayString = "${app.outbox.relay-interval:PT5S}")
+    @Scheduled(fixedDelayString = "${app.outbox.relay-interval}",
+            initialDelayString = "${app.outbox.relay-interval}")
     void sweep() {
         int published = publishPending();
         if (published > 0) {

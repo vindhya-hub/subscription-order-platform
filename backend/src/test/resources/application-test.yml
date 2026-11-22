@@ -1,0 +1,25 @@
+# Test profile: a private H2 database per Spring context, no demo data, no cron billing and fast pipeline
+# timings. Individual tests switch the background consumer or scheduling off where they need full control.
+spring:
+  datasource:
+    url: jdbc:h2:mem:test-${random.uuid};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+  graphql:
+    graphiql:
+      enabled: false
+
+app:
+  seed:
+    enabled: false
+  billing:
+    scheduler:
+      enabled: false
+  processing:
+    simulated-latency: 0ms
+  messaging:
+    retry-backoff: 50ms
+    consumer:
+      wait-time: 200ms
+
+logging:
+  level:
+    com.subscriptionplatform: WARN

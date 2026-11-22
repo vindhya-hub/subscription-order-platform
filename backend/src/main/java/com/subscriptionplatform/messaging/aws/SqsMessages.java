@@ -73,8 +73,13 @@ final class SqsMessages {
     }
 
     static int toVisibilitySeconds(Duration delay) {
-        long seconds = (Math.max(0, delay.toMillis()) + 999) / 1000;
-        return (int) Math.min(seconds, MAX_VISIBILITY_SECONDS);
+        return (int) Math.min(toWholeSeconds(delay), MAX_VISIBILITY_SECONDS);
+    }
+
+    /** Rounds up to whole seconds, the unit SQS uses for wait times and visibility timeouts. */
+    static int toWholeSeconds(Duration duration) {
+        long seconds = (Math.max(0, duration.toMillis()) + 999) / 1000;
+        return (int) Math.min(seconds, Integer.MAX_VALUE);
     }
 
     /** Makes the given messages visible again immediately (batches of ten). */

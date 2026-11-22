@@ -16,7 +16,7 @@ public class FulfillmentSimulator {
 
     public FulfillmentSimulator(FailureInjector failureInjector, ProcessingProperties properties) {
         this.failureInjector = failureInjector;
-        this.latency = properties.simulatedLatency();
+        this.latency = properties.simulatedLatency() != null ? properties.simulatedLatency() : Duration.ZERO;
     }
 
     /**

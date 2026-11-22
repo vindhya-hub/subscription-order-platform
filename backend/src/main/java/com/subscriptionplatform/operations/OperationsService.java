@@ -42,7 +42,8 @@ public class OperationsService {
     }
 
     /**
-     * Moves dead letters back to the order queue and marks their orders PENDING again.
+     * Moves dead letters back to the order queue. Each order is marked PENDING again <em>before</em> its message
+     * is re-sent, so the consumer can never pick the message up while the order is still being requeued.
      *
      * @param messageIds which messages to replay; {@code null} replays all of them
      */
@@ -50,21 +51,23 @@ public class OperationsService {
         if (messageIds != null && messageIds.isEmpty()) {
             return new ReplayResult(0, List.of());
         }
-        List<DeadLetterMessage> moved = deadLetterQueue.redrive(messageIds == null ? Set.of() : Set.copyOf(messageIds));
-        for (DeadLetterMessage message : moved) {
-            Long orderId = orderIdOf(message);
-            if (orderId == null) {
-                continue;
-            }
-            try {
-                orders.requeue(orderId);
-            } catch (OptimisticLockingFailureException e) {
-                // The consumer already picked the replayed message up; its status update wins.
-                log.debug("Order {} changed while being requeued", orderId);
-            }
-        }
+        List<DeadLetterMessage> moved = deadLetterQueue.redrive(
+                messageIds == null ? Set.of() : Set.copyOf(messageIds), this::requeueOrder);
         log.info("Replayed {} dead letter(s)", moved.size());
         return new ReplayResult(moved.size(), moved.stream().map(DeadLetterMessage::messageId).toList());
+    }
+
+    private void requeueOrder(DeadLetterMessage message) {
+        Long orderId = orderIdOf(message);
+        if (orderId == null) {
+            return; // unreadable payload: replay it anyway, the consumer will dead-letter it again
+        }
+        try {
+            orders.requeue(orderId);
+        } catch (OptimisticLockingFailureException e) {
+            // Something else updated the order at the same moment; its update stands.
+            log.debug("Order {} changed while being requeued", orderId);
+        }
     }
 
     public QueueStats queueStats() {
