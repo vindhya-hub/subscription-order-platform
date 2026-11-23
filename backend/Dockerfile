@@ -9,8 +9,11 @@ COPY pom.xml ./
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -q dependency:go-offline
 
 COPY src ./src
+# The extracted thin jar keeps the input file's name, so copy it to application.jar first:
+# that is the name the ENTRYPOINT below starts.
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -q -DskipTests package \
- && java -Djarmode=tools -jar target/subscription-order-platform-*.jar extract --layers --destination extracted
+ && cp target/subscription-order-platform-*.jar application.jar \
+ && java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 # ---- Runtime: JRE 17 only, non-root ----
 FROM eclipse-temurin:17-jre-noble
