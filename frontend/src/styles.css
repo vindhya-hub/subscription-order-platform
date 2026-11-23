@@ -154,12 +154,9 @@ code {
 }
 
 @media (max-width: 1100px) {
-  .app-header {
-    grid-template-columns: 1fr;
-  }
-
+  .app-header,
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -212,6 +209,7 @@ code {
 
 .billing-run {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 10px;
 }
